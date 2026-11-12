@@ -1,5 +1,11 @@
 # Building the PS4 port
 
+Just throw it to Claude and tell him to make no mistakes
+
+
+OR
+
+
 Use Ubuntu 24.04 or Ubuntu 24.04 under WSL2. Keep the checkout and build directories on the Linux filesystem for faster builds. Run the following from the repository root.
 
 ```bash
