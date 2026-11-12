@@ -1,0 +1,21 @@
+# Never committed: the disc, its files, generated code, Sony binaries, packages, logs and build output
+game/
+out/
+/release-prep/
+logs/
+*.iso
+*.xiso
+*.xbe
+*.pkg
+*.elf
+*.fself
+*.prx
+*.sprx
+*.self
+*.bin
+*.log
+*.old.log
+gen/
+build*/
+__pycache__/
+*.pyc
