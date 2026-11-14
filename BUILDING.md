@@ -1,10 +1,14 @@
 # Building the PS4 port
 
-Just throw it to Claude and tell him to make no mistakes
+On Ubuntu 24.04 (including WSL2), run this from the repository root:
 
+```bash
+bash tools/build-ps4-package.sh /path/to/extracted/game
+```
 
-OR
+Use the folder containing `default.xbe` and `NFSUNDER/`. The first run may ask for your Ubuntu password to install build tools. It downloads and caches the pinned dependencies, generates the game code locally, and prints the path to the finished package under `out/`. The first build can take a while.
 
+## Manual build
 
 Use Ubuntu 24.04 or Ubuntu 24.04 under WSL2. Keep the checkout and build directories on the Linux filesystem for faster builds. Run the following from the repository root.
 

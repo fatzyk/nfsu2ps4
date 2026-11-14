@@ -1,13 +1,8 @@
 /*
  * ps4_orbis.c -- PS4 boot glue for the NFSU2 recompilation (the counterpart of switch_nx.c).
  *
- *   logs      /data/nfsu2x/nfsu2x.log (the previous run is kept as nfsu2x.old.log). Every printf/fprintf in the
- *             program goes through ps4_log_file (see ps4/ps4_stdio.h): a 1 MiB buffer flushed twice a second by
- *             the watcher thread, never a write per line.
  *   settings  /data/nfsu2x/nfsu2x_env.txt, KEY=VALUE per line, '#' comments (a console has no environment)
  *   closing   background execution also means the Home screen, so it must never trigger an exit timer.
- *             Lifecycle diagnostics go to a separate, unbuffered close_trace.log, independent of stdio locks.
- *             Close Application still needs console diagnosis; the old probes received no signal or event.
  *             exit() and returning from main() end in SIGSYS and a crash dialog: nothing here calls them.
  *   paths     absolute only, /data/nfsu2x/...
  *
@@ -20,7 +15,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
-#include <fcntl.h>
 #include <unistd.h>
 #include <signal.h>
 #include <pthread.h>
@@ -34,10 +28,7 @@
 #include <orbis/UserService.h>
 
 #define PS4_DIR      "/data/nfsu2x"
-#define PS4_LOG      PS4_DIR "/nfsu2x.log"
-#define PS4_LOG_OLD  PS4_DIR "/nfsu2x.old.log"
 #define PS4_ENV      PS4_DIR "/nfsu2x_env.txt"
-#define LOG_BUF      (1024 * 1024)
 
 int   mcpx_apu_frames_per_second(void);      /* xboxrecomp/src/apu */
 float mcpx_apu_utilization(void);
@@ -60,31 +51,13 @@ static double now_s(void)
 
 static void __attribute__((constructor)) early_log(void)
 {
-    ps4_log_file = stderr;          /* until ps4_boot() opens the file */
+    ps4_log_file = stderr;
 }
 
 void ps4_flush_log(void)
 {
     if (ps4_log_file)
         fflush(ps4_log_file);
-}
-
-static int log_open(void)
-{
-    FILE *f;
-    char *buf;
-
-    mkdir(PS4_DIR, 0777);
-    mkdir(PS4_DIR "/cache", 0777);
-    rename(PS4_LOG, PS4_LOG_OLD);
-    f = fopen(PS4_LOG, "w");
-    if (!f)
-        return 0;
-    buf = (char *)malloc(LOG_BUF);
-    if (buf)
-        setvbuf(f, buf, _IOFBF, LOG_BUF);
-    ps4_log_file = f;
-    return 1;
 }
 
 static void load_env(void)
@@ -485,7 +458,6 @@ static void prof_start(void)
 typedef int (*status_fn)(void *);
 typedef int (*event_fn)(void *);
 
-static int s_close_fd = -1;
 static volatile sig_atomic_t s_close_signal;
 
 static void close_signal(int sig)
@@ -493,96 +465,26 @@ static void close_signal(int sig)
     s_close_signal = sig;
 }
 
-static void close_trace(const char *phase, int rc, const unsigned char *st)
-{
-    char line[256];
-    int len = snprintf(line, sizeof line,
-                       "[close] t=%.2f %s rc=0x%x signal=%d frames=%u status=%02x%02x%02x%02x/%02x/%02x/%02x/%02x/%02x\n",
-                       now_s() - s_t0, phase, (unsigned)rc, (int)s_close_signal, s_frames,
-                       st[0], st[1], st[2], st[3], st[4], st[5], st[6], st[7], st[8]);
-    for (int i = 9; i < 48 && len > 0 && (size_t)len + 4 < sizeof line; i++)
-        len += snprintf(line + len - 1, sizeof line - len + 1, " %02x\n", st[i]);
-    if (s_close_fd >= 0 && len > 0 && (size_t)len < sizeof line)
-        (void)write(s_close_fd, line, (size_t)len);
-}
-
-/* Flush the game log and trace lifecycle calls without treating backgrounding as Close. */
+/* Drain lifecycle events without treating the Home screen as a close request. */
 static void *watcher(void *arg)
 {
-    unsigned n = 0;
     int splash_hidden = 0;
     (void)arg;
     for (;;) {
-        static unsigned char st[256], st_prev[256];
+        static unsigned char st[256];
         static unsigned char event[8196] __attribute__((aligned(16)));
-        int status_rc;
         usleep(100 * 1000);
-        if (n % 10 == 0)
-            close_trace("before-status", 0, st_prev);
         memset(st, 0, sizeof st);
-        status_rc = ((status_fn)sceSystemServiceGetStatus)(st);
-        if (status_rc == 0 && st[5] != st_prev[5])
-            prof_main_background(st[5] != 0);
-        if (n % 10 == 0 || status_rc != 0 || memcmp(st, st_prev, sizeof st) != 0)
-            close_trace("after-status", status_rc, st);
-        if (status_rc == 0)
-            memcpy(st_prev, st, sizeof st);
-        if (status_rc == 0 && (st[0] || st[1] || st[2] || st[3])) {
-            int event_rc;
+        if (((status_fn)sceSystemServiceGetStatus)(st) == 0 &&
+            (st[0] || st[1] || st[2] || st[3])) {
             memset(event, 0, sizeof event);
-            close_trace("before-event", 0, st);
-            event_rc = ((event_fn)sceSystemServiceReceiveEvent)(event);
-            close_trace("after-event", event_rc, event);
+            ((event_fn)sceSystemServiceReceiveEvent)(event);
         }
-        if (s_close_signal) {
-            /* No stdio or Sony calls from a signal handler. */
-            close_trace("termination-signal", 0, st);
+        if (s_close_signal)
             kill(getpid(), SIGKILL);
-        }
         if (!splash_hidden && (s_frames || now_s() - s_t0 >= 20.0)) {
-            int rc = sceSystemServiceHideSplashScreen();
-            fprintf(ps4_log_file, "[ps4] splash screen hidden (0x%x)\n", (unsigned)rc);
+            sceSystemServiceHideSplashScreen();
             splash_hidden = 1;
-        }
-        if (++n % 5 == 0) {
-            if (n % 10 == 0)
-                close_trace("before-flush", 0, st);
-            fflush(ps4_log_file);
-            if (n % 10 == 0)
-                close_trace("after-flush", 0, st);
-        }
-        if (n % 100 == 0) {
-            static unsigned last_frames;
-            unsigned f = s_frames;
-            fprintf(ps4_log_file, "[perf] t=%.0f s: %.1f fps presented, APU %d frames/s (1500 = real time), frame thread %.0f%% busy\n",
-                    now_s() - s_t0, (f - last_frames) / 10.0, mcpx_apu_frames_per_second(), mcpx_apu_utilization() * 100.0f);
-            last_frames = f;
-            {
-                size_t flex = 0, dlen = 0;
-                long long dstart = 0;
-                ((avail_flex_fn)sceKernelAvailableFlexibleMemorySize)(&flex);
-                ((avail_dm_fn)sceKernelAvailableDirectMemorySize)(0, (long long)sceKernelGetDirectMemorySize(), 0, &dstart, &dlen);
-                if (nv2a_vk_pool_report) {
-                    char pb[512];
-                    nv2a_vk_pool_report(pb, sizeof pb);
-                    fprintf(ps4_log_file, "[perf] pool (last 10 s): %s\n", pb);
-                }
-                fprintf(ps4_log_file, "[perf] threads: %d created, %d running through the census wrapper\n", (int)s_threads_made,
-                        (int)s_threads_live);
-                fprintf(ps4_log_file, "[perf] memory: flexible %zu MiB free, direct memory largest free block %zu MiB\n", flex >> 20,
-                        dlen >> 20);
-            }
-            {
-                static uint64_t last_under, last_drop, last_sub;
-                Xa2Stats st;
-                xa2_get_stats(&st);
-                fprintf(ps4_log_file, "[perf] audio: %llu blocks in, %llu queue underruns, %llu dropped (last 10 s), peak %d\n",
-                        (unsigned long long)(st.submitted - last_sub), (unsigned long long)(st.underruns - last_under),
-                        (unsigned long long)(st.dropped - last_drop), st.peak);
-                last_under = st.underruns;
-                last_drop = st.dropped;
-                last_sub = st.submitted;
-            }
         }
     }
     return NULL;
@@ -616,22 +518,16 @@ void ps4_boot(void)
 
     s_t0 = now_s();
     ps4_log_file = stderr;
-    if (!log_open())
-        fprintf(stderr, "[ps4] log file unavailable\n");
-    rename(PS4_DIR "/close_trace.log", PS4_DIR "/close_trace.old.log");
-    s_close_fd = open(PS4_DIR "/close_trace.log", O_WRONLY | O_CREAT | O_TRUNC, 0666);
+    mkdir(PS4_DIR, 0777);
+    mkdir(PS4_DIR "/cache", 0777);
     {
         struct sigaction sa;
-        int term_rc, int_rc;
         memset(&sa, 0, sizeof sa);
         sa.sa_handler = close_signal;
         sigemptyset(&sa.sa_mask);
-        term_rc = sigaction(SIGTERM, &sa, NULL);
-        int_rc = sigaction(SIGINT, &sa, NULL);
-        fprintf(ps4_log_file, "[ps4] close diagnostic: trace fd=%d, SIGTERM rc=%d, SIGINT rc=%d; no background exit timer\n",
-                s_close_fd, term_rc, int_rc);
+        sigaction(SIGTERM, &sa, NULL);
+        sigaction(SIGINT, &sa, NULL);
     }
-    fprintf(ps4_log_file, "[ps4] NFSU2 PS4 port, boot (log %s)\n", PS4_LOG);
     fprintf(ps4_log_file, "[ps4] ps4_boot at %p (subtract from a crash address to get an ELF offset)\n", (void *)ps4_boot);
     setenv("MESA_SHADER_CACHE_DISABLE", "true", 0);   /* no util_queue thread for Mesa's disk cache */
     /* Defaults (nfsu2x_env.txt overrides). The profile of build 16 showed the game thread busy ~40% and the executor ~70% in
@@ -639,7 +535,6 @@ void ps4_boot(void)
     setenv("RECOMP_VK_THREAD", "1", 0);               /* Vulkan recording on its own thread (build 19) */
     setenv("RECOMP_FRAME_LAG", "1", 0);
     setenv("RECOMP_GIL_EAGER", "1", 0);
-    setenv("RECOMP_PS4_PROFILE", "0", 0);             /* opt in: 1 legacy, 2 game thread only */
     setenv("NFSU2_FPS_CAP", "30", 0);
     setenv("RECOMP_VK_WARM_TEX", "1", 0);
     setenv("ORBIS_SUBMIT_DONE", "1", 0);
@@ -656,7 +551,6 @@ void ps4_boot(void)
         pthread_detach(t);
     else
         fprintf(ps4_log_file, "[ps4] could not start the watcher thread\n");
-    prof_start();
     fflush(ps4_log_file);
 }
 

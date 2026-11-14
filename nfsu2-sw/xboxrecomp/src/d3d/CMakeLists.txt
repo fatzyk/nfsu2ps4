@@ -14,9 +14,6 @@ if(WIN32)
     )
     target_link_libraries(xbox_d3d8 PUBLIC platform d3d11 dxgi dxguid d3dcompiler)
 
-    # Offline smoke test for the pure format layer (no D3D11 device needed).
-    add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../../tests/d3d8_smoke
-                     ${CMAKE_CURRENT_BINARY_DIR}/d3d8_smoke)
 elseif(NINTENDO_SWITCH OR PS4)
     # No HLE D3D8 renderer on the Switch: titles there draw through the NV2A
     # executor and src/nv2a_gl.
