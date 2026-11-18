@@ -1,8 +1,6 @@
 # Optional: build the PS4 port locally
 
-If you already have the FPKG, skip this guide and follow the [installation steps](README.md#download-and-install). To build your own package, use an extracted **original Xbox NTSC-U (USA)** copy of the game.
-
-> Just throw it to Claude and tell him to make no mistakes
+If you already have the FPKG, skip this guide and follow the [installation steps](README.md#download-and-install). To build your own package, use an extracted **original Xbox NTSC-U (USA)** copy of the game. Or just throw this to Claude and tell him to make no mistakes :) 
 
 ## One-command build
 
