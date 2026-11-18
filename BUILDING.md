@@ -1,4 +1,9 @@
 # Building the PS4 port
+Just throw it to Claude and tell him to make no mistakes
+
+
+OR
+
 
 On Ubuntu 24.04 (including WSL2), run this from the repository root:
 
