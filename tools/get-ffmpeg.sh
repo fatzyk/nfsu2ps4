@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# FFmpeg tag n7.1 (what nfsu2-sw's tools/build_ffmpeg_vp6.sh uses), into a new empty folder.
+# FFmpeg tag n7.1 (used by nfsu2-ps4/ps4/build_ffmpeg_vp6.sh), into a new empty folder.
 set -euo pipefail
 F="$HOME/ps4/ffmpeg"
 mkdir "$F" "$F/dl"

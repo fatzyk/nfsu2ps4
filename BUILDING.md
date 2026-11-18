@@ -1,9 +1,10 @@
-# Building the PS4 port
-Just throw it to Claude and tell him to make no mistakes
+# Optional: build the PS4 port locally
 
+If you already have the FPKG, skip this guide and follow the [installation steps](README.md#download-and-install). To build your own package, use an extracted **original Xbox NTSC-U (USA)** copy of the game.
 
-OR
+> Just throw it to Claude and tell him to make no mistakes
 
+## One-command build
 
 On Ubuntu 24.04 (including WSL2), run this from the repository root:
 
@@ -38,7 +39,7 @@ bash tools/get-glslang.sh
 bash tools/get-spirv.sh
 bash tools/build-glslang.sh
 bash tools/get-ffmpeg.sh
-bash nfsu2-sw/ps4/build_ffmpeg_vp6.sh
+bash nfsu2-ps4/ps4/build_ffmpeg_vp6.sh
 ```
 
 Set `NFSU2_XBE` to your extracted disc's executable. The analysis file and generated C stay on your machine. The source is based on nfsu2-sw revision `3247829db250e871b398dd6cfe931d8068332027`.
@@ -46,7 +47,7 @@ Set `NFSU2_XBE` to your extracted disc's executable. The analysis file and gener
 ```bash
 export NFSU2_XBE=/absolute/path/to/game/default.xbe
 export NFSU2_GEN_DIR="$HOME/nfsu2x/gen"
-cd nfsu2-sw
+cd nfsu2-ps4
 (
   cd xboxrecomp
   python3 -m tools.xbe_parser "$NFSU2_XBE" --json "${NFSU2_XBE%.*}_analysis.json"
@@ -62,3 +63,5 @@ OPENSSL_LIB=/absolute/path/to/openssl11/lib bash ps4/build.sh pkg
 ```
 
 The package is written to `~/ps4/out-nfsu2/` by default. The standard recipe uses the OpenOrbis sample icon. The package contains code generated from your own Xbox executable and pulls packaging modules from your local OpenOrbis setup. Keep the resulting package for local use.
+
+Once the build finishes, install the package you made and follow the [game file setup in the README](README.md#download-and-install).

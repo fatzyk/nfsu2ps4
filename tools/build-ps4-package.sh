@@ -60,10 +60,10 @@ fi
 export FFMPEG_DIR="$p/ffmpeg-vp6-ps4"
 if [[ ! -f "$FFMPEG_DIR/lib/libavcodec.a" ]]; then
     [[ -f "$p/ffmpeg/src/configure" ]] || bash "$root/tools/get-ffmpeg.sh"
-    bash "$root/nfsu2-sw/ps4/build_ffmpeg_vp6.sh"
+    bash "$root/nfsu2-ps4/ps4/build_ffmpeg_vp6.sh"
 fi
 
-cp -a "$root/nfsu2-sw" "$work/source"
+cp -a "$root/nfsu2-ps4" "$work/source"
 cp "$game/default.xbe" "$work/default.xbe"
 export NFSU2_XBE="$work/default.xbe" NFSU2_GEN_DIR="$work/gen"
 cd "$work/source/xboxrecomp"
