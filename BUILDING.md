@@ -18,7 +18,7 @@ Use Ubuntu 24.04 or Ubuntu 24.04 under WSL2. Keep the checkout and build directo
 
 ```bash
 sudo apt install build-essential cmake ninja-build clang lld llvm curl nasm \
-  python3 python3-capstone python3-pefile python3-numpy
+  python3 python3-capstone
 mkdir -p "$HOME/ps4/sdk"
 ```
 
@@ -60,6 +60,6 @@ To make a local package, point `OPENSSL_LIB` to the directory containing the Ope
 OPENSSL_LIB=/absolute/path/to/openssl11/lib bash ps4/build.sh pkg
 ```
 
-The package is written to `~/ps4/out-nfsu2/` by default. The standard recipe uses the OpenOrbis sample icon. The package contains code generated from your own Xbox executable and pulls packaging modules from your local OpenOrbis setup. Keep the resulting package for local use.
+The package is written to `~/ps4/out-nfsu2/` by default. The standard recipe uses the U2 community-port icon. The package contains code generated from your own Xbox executable and pulls packaging modules from your local OpenOrbis setup. Keep the resulting package for local use.
 
 Once the build finishes, install the package you made and follow the [game file setup in the README](README.md#download-and-install).

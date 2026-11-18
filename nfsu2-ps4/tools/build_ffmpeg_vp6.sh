@@ -1,22 +1,19 @@
 #!/usr/bin/env bash
 # Build the minimal FFmpeg the movie decoder links (src/movie_vp6.c):
 # libavcodec + libavutil with only the vp6 decoder. LGPL 2.1 -- no GPL parts
-# (devkitPro's switch-ffmpeg is built with --enable-gpl; don't link that).
 #
-#   tools/build_ffmpeg_vp6.sh switch|linux
+#   tools/build_ffmpeg_vp6.sh linux
 #
 # Environment:
 #   FFMPEG_SRC   FFmpeg source (default /root/nfsu2x/ref/ffmpeg-7.1,
 #                git clone -b release/7.1 https://github.com/FFmpeg/FFmpeg.git)
-#   PREFIX       install prefix (default /root/nfsu2x/ffmpeg-vp6-<target>)
-#   DEVKITPRO    default /opt/devkitpro
+#   PREFIX       install prefix (default /root/nfsu2x/ffmpeg-vp6-linux)
 set -euo pipefail
 
-TARGET="${1:-switch}"
+[[ $# -eq 0 || ( $# -eq 1 && $1 == linux ) ]] || { echo "usage: $0 linux" >&2; exit 1; }
 SRC="${FFMPEG_SRC:-/root/nfsu2x/ref/ffmpeg-7.1}"
-PREFIX="${PREFIX:-/root/nfsu2x/ffmpeg-vp6-$TARGET}"
+PREFIX="${PREFIX:-/root/nfsu2x/ffmpeg-vp6-linux}"
 BUILD="$PREFIX-build"
-DEVKITPRO="${DEVKITPRO:-/opt/devkitpro}"
 
 COMMON=(--prefix="$PREFIX" --disable-everything --enable-decoder=vp6
         --disable-avformat --disable-avdevice --disable-avfilter --disable-swscale
@@ -26,22 +23,7 @@ COMMON=(--prefix="$PREFIX" --disable-everything --enable-decoder=vp6
 
 mkdir -p "$BUILD"
 cd "$BUILD"
-case "$TARGET" in
-switch)
-    export PATH="$DEVKITPRO/devkitA64/bin:$PATH"
-    "$SRC/configure" "${COMMON[@]}" --enable-cross-compile --cross-prefix=aarch64-none-elf- \
-        --arch=aarch64 --cpu=cortex-a57 --target-os=none --enable-neon \
-        --disable-runtime-cpudetect \
-        --extra-cflags="-D__SWITCH__ -O2 -march=armv8-a -mtune=cortex-a57 -mtp=soft -fPIC -ftls-model=local-exec -I$DEVKITPRO/libnx/include" \
-        --extra-ldflags="-specs=$DEVKITPRO/libnx/switch.specs -fPIE -L$DEVKITPRO/libnx/lib" \
-        --extra-libs=-lnx >configure.log
-    ;;
-linux)
-    "$SRC/configure" "${COMMON[@]}" --disable-x86asm >configure.log
-    ;;
-*)
-    echo "usage: $0 switch|linux" >&2; exit 1 ;;
-esac
+"$SRC/configure" "${COMMON[@]}" --disable-x86asm >configure.log
 grep -E '^License' configure.log
 make -j"$(nproc)" >make.log
 make install >install.log

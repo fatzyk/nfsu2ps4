@@ -3,8 +3,7 @@ cmake_minimum_required(VERSION 3.20)
 # ============================================================================
 # Need for Speed: Underground 2 (Xbox, NTSC-U) - Static Recompilation
 #
-# Hosts: Windows (MSVC, D3D11), Linux (GCC, SDL2 + OpenGL) and Nintendo
-# Switch homebrew (devkitA64 + libnx, built with switch/build.sh).
+# PS4 homebrew with desktop reference builds.
 # ============================================================================
 
 project(nfsu2_recomp C)
@@ -30,8 +29,7 @@ if(NOT EXISTS "${NFSU2_GEN_DIR}/recomp_funcs.h")
                         "with --gen-dir, or pass -DNFSU2_GEN_DIR=<dir>.")
 endif()
 
-# The Vulkan renderer (xboxrecomp nv2a_vk) instead of OpenGL. On the Switch it
-# links mesa-switch's static NVK (NVK_SDK) and builds nfsu2x-vulkan.nro.
+# Use the Xbox runtime Vulkan renderer instead of OpenGL.
 option(NFSU2_VULKAN "Render with Vulkan instead of OpenGL" OFF)
 set(XBOXRECOMP_VULKAN ${NFSU2_VULKAN} CACHE BOOL "" FORCE)
 
@@ -52,8 +50,6 @@ file(GLOB RECOMP_GEN_SOURCES CONFIGURE_DEPENDS "${NFSU2_GEN_DIR}/*.c")
 set(GAME_SOURCES
     src/main.c
     src/recomp_manual.c
-    src/switch_nx.c
-    src/switch_saltynx.c
     src/ps4_orbis.c
     src/text_patch.c
     src/movie_crop.c
@@ -79,7 +75,6 @@ if(NFSU2_FFMPEG_DIR)
     endif()
     target_sources(${PROJECT_NAME} PRIVATE src/movie_vp6.c)
     target_compile_definitions(${PROJECT_NAME} PRIVATE NFSU2_NATIVE_VP6=1)
-    # BEFORE: the Switch portlibs include dir has devkitPro's (GPL) FFmpeg headers.
     target_include_directories(${PROJECT_NAME} BEFORE PRIVATE "${NFSU2_FFMPEG_DIR}/include")
     target_link_libraries(${PROJECT_NAME} PRIVATE
         "${NFSU2_FFMPEG_DIR}/lib/libavcodec.a" "${NFSU2_FFMPEG_DIR}/lib/libavutil.a")
@@ -103,14 +98,7 @@ if(WIN32)
         target_compile_options(${PROJECT_NAME} PRIVATE /bigobj)
     endif()
 else()
-    # The generated chunks are huge straight-line functions; -O1 keeps GCC's
-    # memory and time per chunk sane while still allocating registers. The
-    # Switch's CPU is the bottleneck there, so it gets -O2.
-    if(NINTENDO_SWITCH)
-        set(NFSU2_GEN_OPT "-O2" CACHE STRING "Optimisation for the lifted code")
-    else()
-        set(NFSU2_GEN_OPT "-O1" CACHE STRING "Optimisation for the lifted code")
-    endif()
+    set(NFSU2_GEN_OPT "-O1" CACHE STRING "Optimisation for the lifted code")
     # NFSU2_LTO: link-time optimisation of the lifted code and its manual
     # overrides, so lifted callers inline each other and the native leaves
     # (_ftol2, ...). The runtime and renderers are compiled as usual.
@@ -140,57 +128,7 @@ if(PS4)
     # supplies as a stub that leaks them (they live as long as the process anyway).
     target_sources(${PROJECT_NAME} PRIVATE "${ORBIS_COMPAT_DIR}/optional/orbis_thread_atexit_stub.c")
     target_link_libraries(${PROJECT_NAME} PRIVATE -lScePad -lSceUserService -lSceAudioOut -lSceSystemService)
-    # a census of every thread the process creates (ps4_orbis.c __wrap_pthread_create): builds 5-8 hit a process-wide limit
-    target_link_options(${PROJECT_NAME} PRIVATE "LINKER:--wrap=pthread_create" "LINKER:--wrap=pthread_exit")
     if(COMMAND ps4_create_eboot)
         ps4_create_eboot(${PROJECT_NAME})
-    endif()
-endif()
-
-# ── Nintendo Switch homebrew (devkitA64 + libnx) ────────────────
-#
-# Build with switch/build.sh. The NRO reads the extracted disc from
-# sdmc:/switch/nfsu2x/game/ (never an ISO); logs and nfsu2x_env.txt live in
-# sdmc:/switch/nfsu2x/.
-if(NINTENDO_SWITCH)
-    set(NFSU2_SWITCH_APP_NAME "NFS Underground 2 (Xbox recomp)" CACHE STRING
-        "Title shown in the homebrew menu")
-    set(NFSU2_SWITCH_AUTHOR "nfsu2-xbox" CACHE STRING "Author shown in the homebrew menu")
-    # The release lives here, not in the cache: a cached default stays at
-    # whatever the build directory was first configured with (the 0.4.5 NRO
-    # said 0.4.3). -DNFSU2_SWITCH_VERSION_OVERRIDE=x sets another one.
-    set(NFSU2_SWITCH_VERSION "0.5.9")
-    if(NFSU2_SWITCH_VERSION_OVERRIDE)
-        set(NFSU2_SWITCH_VERSION "${NFSU2_SWITCH_VERSION_OVERRIDE}")
-    endif()
-    set(NFSU2_SWITCH_ICON "${CMAKE_CURRENT_SOURCE_DIR}/assets/icon.jpg" CACHE FILEPATH
-        "256x256 JPEG icon (libnx default when empty)")
-
-    if(NFSU2_VULKAN)
-        # No GL: SDL is only the audio output; NVK comes with nv2a_vk.
-        target_link_libraries(${PROJECT_NAME} PRIVATE nx m)
-    else()
-        # switch-sdl2's GL path is EGL on switch-mesa.
-        target_link_libraries(${PROJECT_NAME} PRIVATE EGL glapi drm_nouveau nx m)
-    endif()
-    # SDL's audio thread gets a real-time priority and audren gaps are
-    # counted (switch_nx.c, "SDL's audio thread").
-    target_link_options(${PROJECT_NAME} PRIVATE
-        "LINKER:--wrap=SDL_SYS_SetThreadPriority"
-        "LINKER:--wrap=audrvVoiceAddWaveBuf")
-    set_property(SOURCE src/switch_nx.c APPEND PROPERTY
-        INCLUDE_DIRECTORIES "${XBOXRECOMP_DIR}/src/apu")
-    # switch_nx.c's loading screen asks EGL for the on-screen size.
-    target_include_directories(${PROJECT_NAME} PRIVATE "$ENV{DEVKITPRO}/portlibs/switch/include")
-
-    set(NFSU2_NACP "${CMAKE_CURRENT_BINARY_DIR}/nfsu2x.nacp")
-    nx_generate_nacp(OUTPUT "${NFSU2_NACP}"
-        NAME "${NFSU2_SWITCH_APP_NAME}"
-        AUTHOR "${NFSU2_SWITCH_AUTHOR}"
-        VERSION "${NFSU2_SWITCH_VERSION}")
-    if(NFSU2_SWITCH_ICON)
-        nx_create_nro(${PROJECT_NAME} NACP "${NFSU2_NACP}" ICON "${NFSU2_SWITCH_ICON}")
-    else()
-        nx_create_nro(${PROJECT_NAME} NACP "${NFSU2_NACP}")
     endif()
 endif()

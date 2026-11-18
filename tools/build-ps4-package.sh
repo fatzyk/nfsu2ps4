@@ -15,10 +15,10 @@ export PATH="$HOME/ps4/bin:$PATH"
 if ! (for cmd in curl clang ld.lld llvm-ar cmake ninja make nasm; do
           command -v "$cmd" >/dev/null || exit 1
       done
-      python3 -c 'import capstone, pefile, numpy'); then
+      python3 -c 'import capstone'); then
     sudo apt-get update
     sudo apt-get install -y build-essential curl clang lld llvm cmake ninja-build nasm \
-        python3 python3-capstone python3-pefile python3-numpy
+        python3 python3-capstone
 fi
 
 p="$HOME/ps4"

@@ -1769,9 +1769,7 @@ void sub_0033518D(void)
  * file (menu_music= .. engine=, 0..1): written into the block when the
  * profile is first applied, saved when a slider hands the block to
  * sub_00076A70 with a changed value. */
-#ifdef __SWITCH__
-#  define NFSU2_OPTIONS_FILE "sdmc:/switch/nfsu2x/nfsu2x_options.txt"
-#elif defined(__PS4__)
+#if defined(__PS4__)
 #  define NFSU2_OPTIONS_FILE "/data/nfsu2x/nfsu2x_options.txt"
 #else
 #  define NFSU2_OPTIONS_FILE "nfsu2x_options.txt"

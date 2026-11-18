@@ -9,7 +9,7 @@
  * Game data is the extracted disc (default.xbe, NFSUNDER/, B3/). Where it is
  * looked for:
  *   Windows/Linux: $NFSU2_GAME_DIR, else ./game
- *   Switch:        sdmc:/switch/nfsu2x/game
+ *   PS4:           /data/nfsu2x/game
  */
 
 #ifdef _WIN32
@@ -26,12 +26,7 @@
 
 #include <xbox/xboxrecomp.h>
 
-#ifdef __SWITCH__
-/* libnx lives in switch_nx.c: <switch.h> and the Win32 vocabulary collide. */
-void switch_boot(void);
-void switch_shutdown(void);
-void switch_error_dialog(const char *msg, const char *details);
-#elif defined(__PS4__)
+#if defined(__PS4__)
 /* ps4_orbis.c */
 void ps4_boot(void);
 void ps4_flush_log(void);
@@ -74,10 +69,7 @@ extern void xbox_path_init(const char *game_dir, const char *save_dir);
 #define NFSU2_ENTRY_POINT 0x0021B1CEu
 
 
-#if defined(__SWITCH__)
-#  define NFSU2_DEFAULT_GAME_DIR "sdmc:/switch/nfsu2x/game"
-#  define NFSU2_DEFAULT_SAVE_DIR "sdmc:/switch/nfsu2x/save"
-#elif defined(__PS4__)
+#if defined(__PS4__)
 #  define NFSU2_DEFAULT_GAME_DIR "/data/nfsu2x/game"
 #  define NFSU2_DEFAULT_SAVE_DIR "/data/nfsu2x/save"
 #else
@@ -161,9 +153,6 @@ static void install_crash_reporter(void)
     SymInitialize(GetCurrentProcess(), NULL, TRUE);
     AddVectoredExceptionHandler(1, veh_handler);
 }
-#elif defined(__SWITCH__)
-/* The CPU exception handler is in switch_nx.c; it calls print_guest_state. */
-static void install_crash_reporter(void) {}
 #else
 #include <execinfo.h>
 
@@ -248,8 +237,6 @@ static void fatal(const char *msg)
     fprintf(stderr, "[FATAL] %s\n", msg);
 #if defined(_WIN32)
     MessageBoxA(NULL, msg, "NFSU2 recomp", MB_ICONERROR);
-#elif defined(__SWITCH__)
-    switch_error_dialog(msg, NULL);
 #elif defined(__PS4__)
     ps4_flush_log();        /* no dialog on the PS4: the log is the report */
 #else
@@ -262,47 +249,13 @@ void xbox_guest_pin(int interrupt);   /* win32_compat.c: the Xbox's one CPU */
 void xbox_gil_enter(void);             /* kernel_bridge.c: the guest lock */
 void xbox_gil_leave(void);
 void xbox_gil_mark_main(void);
-void nfsu2_text_patch_init(void);    /* text_patch.c: Switch button names */
+void nfsu2_text_patch_init(void);    /* text_patch.c: option labels */
 void nfsu2_options_load(void);      /* recomp_manual.c: Options -> Video rows */
 
-#ifdef __SWITCH__
-#include <pthread.h>
-/* The first guest thread runs inline on whichever host thread boots the
- * title, and Horizon's main thread stack is small for recompiled code; boot
- * on a thread with a stack sized like a desktop main thread instead. */
-void xbox_nx_spread_thread(void);   /* win32_compat.c: off core 0, all cores allowed */
-void xbox_nx_track_thread(void *entry);   /* win32_compat.c: Switch [perf] report */
-
-static void *game_thread(void *arg)
-{
-    xbox_nx_spread_thread();
-    xbox_nx_track_thread(NULL);          /* "game:" in the [perf] report */
-    *(int *)arg = game_main();
-    return NULL;
-}
-
-int main(int argc, char **argv)
-{
-    pthread_attr_t attr;
-    pthread_t th;
-    int rc = 1;
-
-    (void)argc;
-    (void)argv;
-    switch_boot();
-    pthread_attr_init(&attr);
-    pthread_attr_setstacksize(&attr, 16u * 1024 * 1024);
-    if (pthread_create(&th, &attr, game_thread, &rc) == 0)
-        pthread_join(th, NULL);
-    else
-        fprintf(stderr, "[FATAL] cannot start the game thread\n");
-    switch_shutdown();
-    return rc;
-}
-#elif defined(__PS4__)
+#if defined(__PS4__)
 #include <pthread.h>
 #include "../xboxrecomp/src/platform/ps4_timing.h"
-/* Same shape as the Switch: the title's first guest thread runs inline on whichever host thread boots it, and
+/* The title's first guest thread runs inline on whichever host thread boots it, and
  * recompiled code nests host calls as deep as the guest nests its own, so boot on a 16 MiB thread. */
 static void *game_thread(void *arg)
 {
@@ -371,7 +324,7 @@ static int game_main(void)
     setenv("RECOMP_USB", "1", 0);       /* the pad is on the MCPX's OHCI */
     setenv("RECOMP_PB_EXEC", "1", 0);   /* the title draws through NV2A */
 #endif
-#if defined(__SWITCH__) || defined(__PS4__)
+#if defined(__PS4__)
     /* Every periodic log line goes to storage; keep the log to what
      * matters on a console. RECOMP_QUIET=0 in nfsu2x_env.txt brings it back. */
     setenv("RECOMP_QUIET", "1", 0);

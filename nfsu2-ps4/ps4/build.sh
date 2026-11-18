@@ -13,7 +13,7 @@
 #   JOBS           parallel jobs (default: nproc, memory-capped)
 #   OPENSSL_LIB    dir with libssl.so.1.1 for PkgTool  $HOME/ps4/openssl11/lib
 #   GLSLANG        glslang install (ps4/build-glslang)  $HOME/ps4/glslang/install
-#   PKG_ICON       optional local 512x512 PNG          OpenOrbis sample icon
+#   PKG_ICON       optional local 512x512 PNG          U2 community-port icon
 #   PKG_VERSION    package version                    01.16
 #   VULKAN         1 = Vulkan renderer (default), 0 = CPU executor only
 set -euo pipefail
@@ -54,7 +54,7 @@ echo "built $BUILD/eboot.bin ($(stat -c %s "$BUILD/eboot.bin") bytes)"
 
 if [ "${1:-}" = "pkg" ]; then
     export PS4_PKGTOOL_OPENSSL_LIB="$OPENSSL_LIB"
-    ICON="${PKG_ICON:-$OO/samples/hello_world/sce_sys/icon0.png}"
+    ICON="${PKG_ICON:-$REPO/ps4/art/icon0.png}"
     mkdir -p "$OUT"
     bash "$SDK/orbis-compat/scripts/ps4/make-pkg.sh" \
         --eboot "$BUILD/eboot.bin" --out-dir "$OUT" \
