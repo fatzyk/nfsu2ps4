@@ -308,11 +308,12 @@ void nv2a_pb_scan(uint32_t put_phys)
             }
             continue;
         }
-        if ((w & 0x00030003u) == 0u) {
+        uint32_t packet = w & 0xE0030003u;
+        if (packet == 0u || packet == 0x40000000u) {
             uint32_t count  = (w >> 18) & 0x7FFu;
             uint32_t subch  = (w >> 13) & 7u;
             uint32_t method =  w & 0x1FFCu;
-            int noninc = (w & 0xE0000000u) == 0x40000000u;
+            int noninc = packet == 0x40000000u;
 
             if (s_exec_enabled && !s_survey && count > 1
                 && s_get + count * 4 <= PB_RAM_BYTES
@@ -340,6 +341,15 @@ void nv2a_pb_scan(uint32_t put_phys)
             continue;
         }
         unknown++;
+        if (s_exec_enabled) {
+            static unsigned invalid_headers;
+            if (++invalid_headers <= 16 || invalid_headers % 100 == 0)
+                fprintf(stderr, "  [PB] invalid header #%u 0x%08X at 0x%08X (PUT 0x%08X); resync\n",
+                        invalid_headers, w, at, put);
+            /* Once packet alignment is lost, payload words can look like methods. */
+            nv2a_pb_resync(put);
+            break;
+        }
     }
 
     s_tot_words += words;

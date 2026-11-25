@@ -4216,12 +4216,15 @@ static void vk_flip(void)
         uint64_t t0 = s_frame_timing ? hz_now() : 0;
 #endif
         POOL_BEGIN();
-        if (vkQueueSubmit(s_queue, 1, &si, s_f->fence) != VK_SUCCESS)
-            LOGE("vkQueueSubmit failed\n");
+        VkResult submit = vkQueueSubmit(s_queue, 1, &si, s_f->fence);
         POOL_END(PL_SUBMIT);
 #ifdef __PS4__
         if (t0) s_hz_submit_ns += hz_now() - t0;
 #endif
+        if (submit != VK_SUCCESS) {
+            LOGE("frame %u vkQueueSubmit failed (VkResult %d)\n", s_frame, (int)submit);
+            exit(EXIT_FAILURE);
+        }
     }
     s_f->submitted = 1;
     if (have_image) {
